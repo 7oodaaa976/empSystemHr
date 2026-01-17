@@ -7,7 +7,7 @@ function currentMonthValue() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`; // "YYYY-MM"
+  return `${y}-${m}`; 
 }
 
 export default function Reports() {
@@ -15,7 +15,7 @@ export default function Reports() {
   const [attendance] = useState(() => load("attendance", []));
 
   const [month, setMonth] = useState(currentMonthValue());
-  const [empId, setEmpId] = useState("all"); // "all" | employee id
+  const [empId, setEmpId] = useState("all"); 
 
   const monthRecords = useMemo(() => {
     // filter by month

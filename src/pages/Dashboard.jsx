@@ -3,117 +3,184 @@ import { Container, Row, Col, Card, Form, Stack } from "react-bootstrap";
 import { load } from "../utils/storage";
 import {
   ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
-  LineChart, Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  LineChart,
+  Line,
 } from "recharts";
 import TopOvertimeTable from "../components/TopOvertimeTable";
-import TopLateTable from './../components/TopLateTable';
+import TopLateTable from "../components/TopLateTable";
 
+// ===================== Helpers =====================
+function toDateTime(date, time) {
+  if (!date || !time) return null;
+  const dt = new Date(`${date}T${time}:00`);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function calcLateMinutes(date, checkIn, start = "09:00") {
+  const inTime = toDateTime(date, checkIn);
+  const startTime = toDateTime(date, start);
+  if (!inTime || !startTime) return 0;
+
+  const diffMin = Math.floor((inTime - startTime) / 60000);
+  return diffMin > 0 ? diffMin : 0;
+}
+
+function calcTotalMinutes(date, checkIn, checkOut) {
+  const inTime = toDateTime(date, checkIn);
+  const outTime = toDateTime(date, checkOut);
+  if (!inTime || !outTime) return 0;
+
+  const diffMin = Math.floor((outTime - inTime) / 60000);
+  return diffMin > 0 ? diffMin : 0;
+}
+
+function calcOvertimeMinutes(totalMinutes, requiredMinutes = 8 * 60) {
+  const diff = (totalMinutes || 0) - requiredMinutes;
+  return diff > 0 ? diff : 0;
+}
+// ===================================================
 
 export default function Dashboard() {
   const [emps] = useState(() => load("emps", []));
   const [attendance] = useState(() => load("attendance", []));
 
   // Filters
-  const [from, setFrom] = useState(""); // YYYY-MM-DD
-  const [to, setTo] = useState("");     // YYYY-MM-DD
+  const [from, setFrom] = useState(""); 
+  const [to, setTo] = useState(""); 
 
   const filteredAttendance = useMemo(() => {
-    return attendance.filter(r => {
+    return attendance.filter((r) => {
       const okFrom = from ? r.date >= from : true;
       const okTo = to ? r.date <= to : true;
       return okFrom && okTo;
     });
   }, [attendance, from, to]);
 
+  const computedAttendance = useMemo(() => {
+    return filteredAttendance.map((r) => {
+      const checkIn = r.checkIn ?? r.inTime ?? r.in ?? "";
+      const checkOut = r.checkOut ?? r.outTime ?? r.out ?? "";
+
+      const totalMinutes =
+        Number(r.totalMinutes ?? 0) || calcTotalMinutes(r.date, checkIn, checkOut);
+
+      const lateMinutes =
+        Number(r.lateMinutes ?? 0) || calcLateMinutes(r.date, checkIn, "09:00");
+
+      const overtimeMinutes =
+        Number(r.overtimeMinutes ?? 0) || calcOvertimeMinutes(totalMinutes, 8 * 60);
+
+      return {
+        ...r,
+        checkIn,
+        checkOut,
+        totalMinutes,
+        lateMinutes,
+        overtimeMinutes,
+      };
+    });
+  }, [filteredAttendance]);
+
   const summary = useMemo(() => {
-    const totalMinutes = filteredAttendance.reduce((s, r) => s + (r.totalMinutes || 0), 0);
-    const lateMinutes = filteredAttendance.reduce((s, r) => s + (r.lateMinutes || 0), 0);
-    const overtimeMinutes = filteredAttendance.reduce((s, r) => s + (r.overtimeMinutes || 0), 0);
+    const totalMinutes = computedAttendance.reduce((s, r) => s + (r.totalMinutes || 0), 0);
+    const lateMinutes = computedAttendance.reduce((s, r) => s + (r.lateMinutes || 0), 0);
+    const overtimeMinutes = computedAttendance.reduce(
+      (s, r) => s + (r.overtimeMinutes || 0),
+      0
+    );
 
     return {
       employees: emps.length,
-      records: filteredAttendance.length,
-      totalHours: +(totalMinutes / 60).toFixed(2),
+      records: computedAttendance.length,
+      totalHours: +((totalMinutes / 60).toFixed(2)),
       lateMinutes,
       overtimeMinutes,
     };
-  }, [filteredAttendance, emps.length]);
+  }, [computedAttendance, emps.length]);
 
   // Chart 1: hours by employee
   const hoursByEmp = useMemo(() => {
-    const map = new Map(); // empId -> totalMinutes
-    for (const r of filteredAttendance) {
+    const map = new Map(); 
+    for (const r of computedAttendance) {
       map.set(r.empId, (map.get(r.empId) || 0) + (r.totalMinutes || 0));
     }
     return emps
-      .map(e => ({
+      .map((e) => ({
         name: e.name,
         hours: +(((map.get(e.id) || 0) / 60).toFixed(2)),
       }))
       .sort((a, b) => b.hours - a.hours);
-  }, [filteredAttendance, emps]);
+  }, [computedAttendance, emps]);
+
   const topLate = useMemo(() => {
-  const map = new Map(); // empId -> { lateMinutes, lateDays }
+    const map = new Map(); 
 
-  for (const r of filteredAttendance) {
-    const late = r.lateMinutes || 0;
-    if (!map.has(r.empId)) map.set(r.empId, { lateMinutes: 0, lateDays: 0 });
-    const obj = map.get(r.empId);
+    for (const r of computedAttendance) {
+      const late = Number(r.lateMinutes || 0);
 
-    obj.lateMinutes += late;
-    if (late > 0) obj.lateDays += 1;
-  }
+      if (!map.has(r.empId)) map.set(r.empId, { lateMinutes: 0, lateDays: 0 });
+      const obj = map.get(r.empId);
 
-  return emps
-    .map(e => {
-      const x = map.get(e.id) || { lateMinutes: 0, lateDays: 0 };
-      return {
-        empId: e.id,
-        name: e.name,
-        job: e.job,
-        lateMinutes: x.lateMinutes,
-        lateDays: x.lateDays,
-      };
-    })
-    .filter(x => x.lateMinutes > 0)
-    .sort((a, b) => b.lateMinutes - a.lateMinutes)
-    .slice(0, 5);
-}, [filteredAttendance, emps]);
-const topOvertime = useMemo(() => {
-  const map = new Map(); // empId -> { overtimeMinutes, otDays }
+      obj.lateMinutes += late;
+      if (late > 0) obj.lateDays += 1;
+    }
 
-  for (const r of filteredAttendance) {
-    const ot = r.overtimeMinutes || 0;
-    if (!map.has(r.empId)) map.set(r.empId, { overtimeMinutes: 0, otDays: 0 });
-    const obj = map.get(r.empId);
+    return emps
+      .map((e) => {
+        const x = map.get(e.id) || { lateMinutes: 0, lateDays: 0 };
+        return {
+          empId: e.id,
+          name: e.name,
+          job: e.job,
+          lateMinutes: x.lateMinutes,
+          lateDays: x.lateDays,
+        };
+      })
+      .filter((x) => x.lateMinutes > 0)
+      .sort((a, b) => b.lateMinutes - a.lateMinutes)
+      .slice(0, 5);
+  }, [computedAttendance, emps]);
+// overtime
+  const topOvertime = useMemo(() => {
+    const map = new Map(); 
 
-    obj.overtimeMinutes += ot;
-    if (ot > 0) obj.otDays += 1;
-  }
+    for (const r of computedAttendance) {
+      const ot = Number(r.overtimeMinutes || 0);
 
-  return emps
-    .map(e => {
-      const x = map.get(e.id) || { overtimeMinutes: 0, otDays: 0 };
-      return {
-        empId: e.id,
-        name: e.name,
-        job: e.job,
-        overtimeMinutes: x.overtimeMinutes,
-        otDays: x.otDays,
-      };
-    })
-    .filter(x => x.overtimeMinutes > 0)
-    .sort((a, b) => b.overtimeMinutes - a.overtimeMinutes)
-    .slice(0, 5);
-}, [filteredAttendance, emps]);
+      if (!map.has(r.empId)) map.set(r.empId, { overtimeMinutes: 0, otDays: 0 });
+      const obj = map.get(r.empId);
 
+      obj.overtimeMinutes += ot;
+      if (ot > 0) obj.otDays += 1;
+    }
 
+    return emps
+      .map((e) => {
+        const x = map.get(e.id) || { overtimeMinutes: 0, otDays: 0 };
+        return {
+          empId: e.id,
+          name: e.name,
+          job: e.job,
+          overtimeMinutes: x.overtimeMinutes,
+          otDays: x.otDays,
+        };
+      })
+      .filter((x) => x.overtimeMinutes > 0)
+      .sort((a, b) => b.overtimeMinutes - a.overtimeMinutes)
+      .slice(0, 5);
+  }, [computedAttendance, emps]);
 
   // Chart 2: last 7 days hours (global)
   const last7Days = useMemo(() => {
     const days = [];
     const today = new Date();
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
@@ -121,16 +188,16 @@ const topOvertime = useMemo(() => {
       days.push(iso);
     }
 
-    const byDate = new Map(); // date -> minutes
-    for (const r of filteredAttendance) {
+    const byDate = new Map();
+    for (const r of computedAttendance) {
       byDate.set(r.date, (byDate.get(r.date) || 0) + (r.totalMinutes || 0));
     }
 
-    return days.map(date => ({
+    return days.map((date) => ({
       date,
       hours: +(((byDate.get(date) || 0) / 60).toFixed(2)),
     }));
-  }, [filteredAttendance]);
+  }, [computedAttendance]);
 
   return (
     <Container className="py-4">
@@ -206,7 +273,13 @@ const topOvertime = useMemo(() => {
                 <ResponsiveContainer>
                   <BarChart data={hoursByEmp}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" interval={0} angle={-15} textAnchor="end" height={60} />
+                    <XAxis
+                      dataKey="name"
+                      interval={0}
+                      angle={-15}
+                      textAnchor="end"
+                      height={60}
+                    />
                     <YAxis />
                     <Tooltip />
                     <Bar dataKey="hours" />
@@ -242,29 +315,33 @@ const topOvertime = useMemo(() => {
           </Card>
         </Col>
       </Row>
+
+      {/* TABLES */}
       <Row className="g-3 mt-1">
-  <Col lg={6}>
-    <Card className="shadow-sm h-100">
-      <Card.Body>
-        <Card.Title className="mb-3">Top Late Employees</Card.Title>
-        <TopLateTable rows={topLate} />
-        <small className="text-muted d-block mt-2">Based on selected date range.</small>
-      </Card.Body>
-    </Card>
-  </Col>
+        <Col lg={6}>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <Card.Title className="mb-3">Top Late Employees</Card.Title>
+              <TopLateTable rows={topLate} />
+              <small className="text-muted d-block mt-2">
+                Based on selected date range. (Start time: 09:00)
+              </small>
+            </Card.Body>
+          </Card>
+        </Col>
 
-  <Col lg={6}>
-    <Card className="shadow-sm h-100">
-      <Card.Body>
-        <Card.Title className="mb-3">Top Overtime Employees</Card.Title>
-        <TopOvertimeTable rows={topOvertime} />
-        <small className="text-muted d-block mt-2">Based on selected date range.</small>
-      </Card.Body>
-    </Card>
-  </Col>
-</Row>
-
-
+        <Col lg={6}>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <Card.Title className="mb-3">Top Overtime Employees</Card.Title>
+              <TopOvertimeTable rows={topOvertime} />
+              <small className="text-muted d-block mt-2">
+                Based on selected date range.
+              </small>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </Container>
   );
 }
