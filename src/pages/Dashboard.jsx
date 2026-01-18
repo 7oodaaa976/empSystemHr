@@ -50,7 +50,6 @@ export default function Dashboard() {
   const [emps] = useState(() => load("emps", []));
   const [attendance] = useState(() => load("attendance", []));
 
-  // Filters
   const [from, setFrom] = useState(""); 
   const [to, setTo] = useState(""); 
 
@@ -104,7 +103,6 @@ export default function Dashboard() {
     };
   }, [computedAttendance, emps.length]);
 
-  // Chart 1: hours by employee
   const hoursByEmp = useMemo(() => {
     const map = new Map(); 
     for (const r of computedAttendance) {
@@ -176,7 +174,6 @@ export default function Dashboard() {
       .slice(0, 5);
   }, [computedAttendance, emps]);
 
-  // Chart 2: last 7 days hours (global)
   const last7Days = useMemo(() => {
     const days = [];
     const today = new Date();
@@ -286,9 +283,7 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <small className="text-muted">
-                Tip: استخدم فلتر التاريخ فوق عشان تحسب فترة معينة.
-              </small>
+              
             </Card.Body>
           </Card>
         </Col>
@@ -308,9 +303,7 @@ export default function Dashboard() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <small className="text-muted">
-                لو مفيش سجلات في الأيام دي هتشوف ساعات = 0.
-              </small>
+             
             </Card.Body>
           </Card>
         </Col>

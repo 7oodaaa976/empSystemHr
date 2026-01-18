@@ -7,6 +7,7 @@ import AttendanceTable from "../components/AttendanceTable";
 import AttendanceEditModal from "../components/AttendanceEditModal";
 import ConfirmModal from "../components/ConfirmModal";
 import AppToast from "../components/AppToast";
+import { Link } from "react-router-dom";
 
 export default function Attendance() {
     const [emps] = useState(() => load("emps", []));
@@ -89,7 +90,7 @@ export default function Attendance() {
         return (
             <Container className="py-4">
                 <Alert variant="warning" className="mb-0">
-                    لازم تضيف موظفين الأول من صفحة Employees.
+                   You must add Employess first  <Link className="text-decoration-none fw-bold" to={"/employees"}>here</Link>
                 </Alert>
             </Container>
         );

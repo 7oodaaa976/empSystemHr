@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Container, Row, Col, Card, Form, Button, Stack, Table, Badge, Alert } from "react-bootstrap";
 import { load } from "../utils/storage";
 import { exportToCSV } from "../utils/csv";
+import { Link } from "react-router-dom";
 
 function currentMonthValue() {
   const d = new Date();
@@ -18,13 +19,10 @@ export default function Reports() {
   const [empId, setEmpId] = useState("all"); 
 
   const monthRecords = useMemo(() => {
-    // filter by month
     let list = attendance.filter(r => String(r.date).startsWith(month));
 
-    // filter by employee
     if (empId !== "all") list = list.filter(r => r.empId === empId);
 
-    // sort by date asc
     list.sort((a, b) => a.date.localeCompare(b.date));
 
     return list;
@@ -73,8 +71,7 @@ export default function Reports() {
     return (
       <Container className="py-4">
         <Alert variant="warning" className="mb-0">
-          لازم تضيف موظفين الأول من صفحة Employees.
-        </Alert>
+You must add Employees First  <Link className="text-decoration-none fw-bold" to={"/employees"}>here</Link>       </Alert>
       </Container>
     );
   }
